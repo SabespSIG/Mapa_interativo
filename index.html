@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="stylesheet" href="./resources/ol.css">
+        <link rel="stylesheet" href="resources/fontawesome-all.min.css">
+        <link href="resources/photon-geocoder-autocomplete.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="./resources/ol-layerswitcher.css">
+        <link rel="stylesheet" href="./resources/qgis2web.css">
+        <style>
+        html, body {
+            background-color: #ffffff;
+        }
+        .ol-control > * {
+            background-color: #f8f8f8!important;
+            color: #444444!important;
+            border-radius: 0px;
+        }
+        .ol-attribution a, .gcd-gl-input::placeholder, .search-layer-input-search::placeholder {
+            color: #444444!important;
+        }
+        .search-layer-input-search {
+            background-color: #f8f8f8!important;
+        }
+        .ol-control > *:focus, .ol-control >*:hover {
+            background-color: rgba(248, 248, 248, 0.7)!important;
+        } 
+        .ol-control {
+            background-color: rgba(255,255,255,.4) !important;
+            padding: 2px !important;
+        } 
+        </style>
+
+        <style>
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        </style>
+        <title></title>
+
+<style>
+  #map { position: relative; }
+  .ol-attribution { bottom: 6px !important; left: 6px !important; }
+</style>
+
+    </head>
+    <body>
+        <div id="map">
+
+    <!-- Busca por coordenadas (lon,lat e UTM 22S/23S) -->
+    <div id="coord-search" style="position:absolute; top:10px; left:50px; z-index:1100; background:#ffffffcc; border:1px solid #666; padding:6px; display:flex; gap:6px; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,.15)">
+        <input id="coord-input" type="text" placeholder="Busca de Coordendas. Ex:-23.550, -46.633 ou 331234 7391234 22S ou 23S"
+            title="Exemplos: -23.550, -46.633 ou 331234 7391234 22S ou 331234 7391234 23S"
+            style="width:320px; padding:4px 6px; border:1px solid #999; font-size:12px"/>
+        <button id="coord-go" style="padding:4px 8px; font-size:12px; cursor:pointer">Ir</button>
+    </div>
+    <!-- Coordenadas (MousePosition) -->
+    <div id="coords" style="position:absolute; bottom:30px; left:20px; z-index:4000; background: rgba(255,255,255,0.98); border:1px solid #333; padding:12px 90px; font-family: Arial, sans-serif; font-size: 12px; color:#111; box-shadow:0 2px 6px rgba(0,0,0,.25); pointer-events:none; max-width:50vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
+    <!-- Upload de KML/ZIP Shapefile -->
+    <div id="upload-panel" style="position:absolute; bottom:10px; right:10px; z-index:4200; background:#ffffffee; border:1px solid #666; padding:8px; display:flex; gap:6px; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,.15)">
+        <label style="font-size:12px; color:#222;">KML / Shapefile (.zip):</label>
+        <input id="file-input" type="file" accept=".kml,.zip" style="font-size:12px"/>
+        <button id="clear-layers" style="font-size:12px; cursor:pointer">Limpar</button>
+        <label style="font-size:12px; margin-left:8px; display:flex; align-items:center; gap:4px;">
+        <input id="toggle-userlayer" type="checkbox" checked> Exibir camada enviada
+        </label>
+    </div>       
+
+            <div id="popup" class="ol-popup">
+                <a href="#" id="popup-closer" class="ol-popup-closer"></a>
+                <div id="popup-content"></div>
+            </div>
+        </div>
+        <script src="resources/qgis2web_expressions.js"></script>
+<script src="resources/proj4.js"></script>
+        <script>proj4.defs('EPSG:4326','+proj=longlat +datum=WGS84 +no_defs');
+        proj4.defs('EPSG:31982', '+proj=utm +zone=22 +south +datum=SIRGAS2000 +units=m +no_defs');
+        proj4.defs('EPSG:31983', '+proj=utm +zone=23 +south +datum=SIRGAS2000 +units=m +no_defs');</script>
+        <script src="./resources/functions.js"></script>
+        <script src="./resources/ol.js"></script>
+        <script src="./resources/ol-layerswitcher.js"></script>
+        <script src="resources/photon-geocoder-autocomplete.min.js"></script>
+        <script src="layers/FUSOS_UTM_3.js"></script><script src="layers/MunicpiosporTerritrioSIF_4.js"></script><script src="layers/SedeMunicipal_5.js"></script><script src="layers/AIST_area4_6.js"></script><script src="layers/AIST_area3_7.js"></script><script src="layers/AIST_area2_8.js"></script><script src="layers/informais_EM_9.js"></script><script src="layers/CadastrosSignosObraExecutada_10.js"></script><script src="layers/DemandaDominialPontos022026_11.js"></script><script src="layers/SABESJURPontosRegularizao_12.js"></script>
+        <script src="styles/FUSOS_UTM_3_style.js"></script><script src="styles/MunicpiosporTerritrioSIF_4_style.js"></script><script src="styles/SedeMunicipal_5_style.js"></script><script src="styles/AIST_area4_6_style.js"></script><script src="styles/AIST_area3_7_style.js"></script><script src="styles/AIST_area2_8_style.js"></script><script src="styles/informais_EM_9_style.js"></script><script src="styles/CadastrosSignosObraExecutada_10_style.js"></script><script src="styles/DemandaDominialPontos022026_11_style.js"></script><script src="styles/SABESJURPontosRegularizao_12_style.js"></script>
+        <script src="./layers/layers.js" type="text/javascript"></script> 
+        <script src="./resources/Autolinker.min.js"></script>
+        <script src="./resources/qgis2web.js"></script>
+        
+<script src="https://unpkg.com/shpjs@latest/dist/shp.min.js"></script> 
+
+<script>
+(function(){
+  function ready(fn){ if (document.readyState !== 'loading'){ fn(); } else { document.addEventListener('DOMContentLoaded', fn); } }
+  // Parse lon/lat, lat/lon, and UTM (SIRGAS 2000) zones 22S/23S
+  function parseCoord(text){
+    if(!text) return null;
+    var t = text.trim().replace(/[;|]/g, ' ').replace(/\s+/g,' ').replace(/,/g,' ').toUpperCase();
+    // 1) two numbers -> lon/lat or lat/lon
+    var m = t.match(/^(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)$/);
+    if(m){
+      var a = parseFloat(m[1]), b = parseFloat(m[2]);
+      var lon, lat;
+      if (Math.abs(a) <= 90 && Math.abs(b) <= 180){ lat = a; lon = b; } else { lon = a; lat = b; }
+      if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) return {lon: lon, lat: lat};
+    }
+    // 2a) EPSG explicit: 'EPSG:31982 E N' or '31982 E N'
+    var um = t.match(/^(?:EPSG:)?(31982|31983)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)$/);
+    if(um){
+      var epsg = 'EPSG:' + um[1];
+      var E = parseFloat(um[2]); var N = parseFloat(um[3]);
+      try{ var ll = proj4(epsg, 'EPSG:4326', [E, N]); return {lon: ll[0], lat: ll[1]}; } catch(e){}
+    }
+    // 2b) 'E N 22S' or 'E N 23S'
+    um = t.match(/^(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s+(22S|23S)$/);
+    if(um){
+      var E2 = parseFloat(um[1]); var N2 = parseFloat(um[2]); var z = um[3];
+      var epsg2 = (z === '22S') ? 'EPSG:31982' : 'EPSG:31983';
+      try{ var ll2 = proj4(epsg2, 'EPSG:4326', [E2, N2]); return {lon: ll2[0], lat: ll2[1]}; } catch(e){}
+    }
+    // 2c) '22S E N' or '23S E N'
+    um = t.match(/^(22S|23S)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)$/);
+    if(um){
+      var z3 = um[1]; var E3 = parseFloat(um[2]); var N3 = parseFloat(um[3]);
+      var epsg3 = (z3 === '22S') ? 'EPSG:31982' : 'EPSG:31983';
+      try{ var ll3 = proj4(epsg3, 'EPSG:4326', [E3, N3]); return {lon: ll3[0], lat: ll3[1]}; } catch(e){}
+    }
+    return null;
+  }
+  ready(function(){
+    var tries = 0;
+    function hook(){
+      var map = window.map;
+      if (!map){ if (tries++ < 50) return setTimeout(hook, 100); else return; }
+      var view = map.getView();
+      // 1) MousePosition no #coords - ordem LAT, LON
+      (function(){
+        var target = document.getElementById('coords');
+        if(target){
+          var mp = new ol.control.MousePosition({
+            projection: 'EPSG:4326',
+            coordinateFormat: function(c){
+              if (!c || c.length < 2) return '';
+              return 'Lat: ' + c[1].toFixed(5) + ' | Lon: ' + c[0].toFixed(5);
+            },
+            className: 'ol-mouse-position',
+            target: target,
+            undefinedHTML: '&nbsp;'
+          });
+          map.addControl(mp);
+        }
+      })();
+      // 2) Busca por coordenadas (lon/lat + UTM 22S/23S)
+      (function(){
+        var input = document.getElementById('coord-input');
+        var btn = document.getElementById('coord-go');
+        if(!input || !btn) return;
+        function fly(){
+          var c = parseCoord(input.value);
+          if(!c){ input.style.borderColor = '#c00'; return; } else { input.style.borderColor = '#999'; }
+          var dest = ol.proj.fromLonLat([c.lon, c.lat], view.getProjection());
+          var currentZoom = view.getZoom() || 4;
+          var targetZoom = Math.max(currentZoom, 12);
+          view.animate({ center: dest, duration: 600 }, { zoom: targetZoom, duration: 400 });
+          try{
+            if(!window.__coordLayer){
+              window.__coordLayer = new ol.layer.Vector({
+                source: new ol.source.Vector(),
+                style: new ol.style.Style({
+                  image: new ol.style.Circle({ radius: 6, fill: new ol.style.Fill({color:'#ff3b30'}), stroke: new ol.style.Stroke({color:'#fff', width:2}) })
+                })
+              });
+              map.addLayer(window.__coordLayer);
+            }
+            window.__coordLayer.getSource().clear();
+            window.__coordLayer.getSource().addFeature(new ol.Feature({ geometry: new ol.geom.Point(dest) }));
+          }catch(e){}
+        }
+        btn.addEventListener('click', fly);
+        input.addEventListener('keydown', function(e){ if(e.key==='Enter'){ fly(); }});
+      })();
+      // 3) Upload KML/SHP com estilo default (sem fill + linha vermelha) e toggle de visibilidade
+      (function(){
+        var input = document.getElementById('file-input');
+        var btnClear = document.getElementById('clear-layers');
+        var chk = document.getElementById('toggle-userlayer');
+        if(!input) return;
+        window.userLayer = new ol.layer.Vector({ source: new ol.source.Vector(), visible: true });
+        map.addLayer(window.userLayer);
+        // estilo padrao: poligono sem fill e contorno vermelho, pontos vermelhos
+        var defaultStyle = new ol.style.Style({
+          fill: new ol.style.Fill({ color: 'rgba(0,0,0,0)' }),
+          stroke: new ol.style.Stroke({ color: 'red', width: 2 }),
+          image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color: 'red' }), stroke: new ol.style.Stroke({ color: '#fff', width: 1 }) })
+        });
+        window.userLayer.setStyle(defaultStyle);
+        function fitToLayer(){
+          var src = window.userLayer.getSource();
+          var extent = src.getExtent();
+          if (extent && !ol.extent.isEmpty(extent)) {
+            view.fit(extent, { duration: 600, maxZoom: 15, padding: [30,30,30,30] });
+          }
+        }
+        function handleKML(arrayBuffer){
+          var text = new TextDecoder('utf-8').decode(new Uint8Array(arrayBuffer));
+          // Ignora estilos do KML para herdar o estilo da camada
+          var fmt = new ol.format.KML({ extractStyles: false });
+          var feats = fmt.readFeatures(text, { dataProjection: 'EPSG:4326', featureProjection: view.getProjection() });
+          window.userLayer.getSource().addFeatures(feats);
+          fitToLayer();
+        }
+        function geojsonToFeatures(geojson){
+          var fmt = new ol.format.GeoJSON();
+          return fmt.readFeatures(geojson, { dataProjection: 'EPSG:4326', featureProjection: view.getProjection() });
+        }
+        function handleShapefile(arrayBuffer){
+          if (typeof shp === 'undefined'){ alert('Biblioteca shpjs não carregou. Verifique a conexão.'); return; }
+          shp(arrayBuffer).then(function(geojson){
+            function add(gj){ var feats = geojsonToFeatures(gj); window.userLayer.getSource().addFeatures(feats); }
+            if (geojson && geojson.type === 'FeatureCollection'){ add(geojson); }
+            else if (geojson && typeof geojson === 'object'){ Object.keys(geojson).forEach(function(k){ var v = geojson[k]; if (v && v.type==='FeatureCollection') add(v); }); }
+            fitToLayer();
+          }).catch(function(err){ console.error(err); alert('Falha ao ler o Shapefile (.zip). Envie .zip com .shp, .shx, .dbf e .prj.'); });
+        }
+        input.addEventListener('change', function(){
+          var file = input.files && input.files[0];
+          if (!file) return;
+          var reader = new FileReader();
+          reader.onload = function(e){
+            var buf = e.target.result;
+            var name = (file.name||'').toLowerCase();
+            if (name.endsWith('.kml')) handleKML(buf);
+            else if (name.endsWith('.zip')) handleShapefile(buf);
+            else alert('Formato não suportado. Envie .kml ou .zip (Shapefile).');
+          };
+          reader.readAsArrayBuffer(file);
+        });
+        if (btnClear){ btnClear.addEventListener('click', function(){ window.userLayer.getSource().clear(); }); }
+        if (chk){ chk.addEventListener('change', function(){ window.userLayer.setVisible(chk.checked); }); window.userLayer.setVisible(chk.checked); }
+      })();
+    }
+    hook();
+  });
+})();
+</script>
+
+</body>
+</html>
