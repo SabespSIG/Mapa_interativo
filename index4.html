@@ -140,6 +140,100 @@
       var map = window.map;
       if (!map){ if (tries++ < 50) return setTimeout(hook, 100); else return; }
       var view = map.getView();
+
+  // === Visibilidade por ZOOM (auto-detecção de camadas) ===
+  // Usa a API nativa do OpenLayers por resolução (minResolution/maxResolution),
+  // e detecta as camadas tanto por variáveis globais (lyr_* / layer_*) quanto pelo título exibido no LayerSwitcher.
+  (function(){
+    // Utilitário: obter todas as camadas (também dentro de groups)
+    function allLayers(){
+      const out = [];
+      function rec(l){
+        if (l instanceof ol.layer.Group){ l.getLayers().forEach(rec); }
+        else out.push(l);
+      }
+      map.getLayers().forEach(rec);
+      return out;
+    }
+
+    // Sanitiza o título (remove tags/legenda do qgis2web)
+    function cleanTitle(html){
+      if (!html) return '';
+      const br = String(html).replace(/<br\s*\/?\s*>/gi,' | ');
+      const noTags = br.replace(/<[^>]*>/g,'').trim();
+      return noTags.split('|')[0].trim();
+    }
+
+    // Procura camada por várias estratégias
+    function findLayerByKey(key){
+      // 1) Globais com prefixo qgis2web comuns
+      const g1 = window['lyr_' + key];
+      if (g1 && typeof g1.getVisible === 'function') return g1;
+      const g2 = window['layer_' + key];
+      if (g2 && typeof g2.getVisible === 'function') return g2;
+      // 2) Procurar pelo título exibido no LayerSwitcher
+      const layers = allLayers();
+      // tentar match direto
+      for (const l of layers){
+        const t = l.get && l.get('title');
+        if (t && String(t).indexOf(key) !== -1) return l;
+      }
+      // tentar pelo título sanitizado
+      for (const l of layers){
+        const t = l.get && cleanTitle(l.get('title'));
+        if (t && t.indexOf(key) !== -1) return l;
+      }
+      return null;
+    }
+
+    // Aplica faixa de ZOOM traduzida para RESOLUTION do OL
+    function setLayerZoomRange(layer, cfg){
+      if (!layer || !map || !map.getView) return;
+      const view = map.getView();
+      const hasMin = typeof cfg.min === 'number';
+      const hasMax = typeof cfg.max === 'number';
+      if (hasMin){
+        const maxRes = view.getResolutionForZoom(cfg.min);
+        if (typeof layer.setMaxResolution === 'function') layer.setMaxResolution(maxRes); else layer.set('maxResolution', maxRes);
+      }
+      if (hasMax){
+        const minRes = view.getResolutionForZoom(cfg.max + 1); // inclui o maxZoom
+        if (typeof layer.setMinResolution === 'function') layer.setMinResolution(minRes); else layer.set('minResolution', minRes);
+      }
+    }
+
+    // ---- MAPEAMENTO (chave = sufixo do arquivo sem extensão) ----
+    const cfg = {
+      'FUSOS_UTM_3':                    {           max: 20  },
+      'MunicpiosSP_4':                  { min: 5,  max: 20 },
+      'MunicpiosporTerritrioSIF_5':     { min: 5,  max: 20 },
+      'SedeMunicipal_6':                { min: 9,  max: 20 },
+      'AIST_area4_7':                   { min: 12,  max: 20 },
+      'AIST_area3_8':                   { min: 12,  max: 20 },
+      'AIST_area2_9':                   { min: 12,  max: 20 },
+      'informais_EM_10':                { min: 12, max: 20 },
+      'CadastrosSignosObraExecutada_11':{ min: 12, max: 20 },
+      'DemandaDominialPontos022026_12': { min: 12, max: 20 },
+      'SABESJURPontosRegularizao_13':   { min: 12, max: 20 }
+    };
+
+    // Diagnóstico: lista títulos sanitizados e tenta aplicar regras
+    const report = [];
+    Object.keys(cfg).forEach(key => {
+      const layer = findLayerByKey(key);
+      if (layer){
+        setLayerZoomRange(layer, cfg[key]);
+        const title = cleanTitle(layer.get && layer.get('title')) || '(sem título)';
+        report.push(`✔ ${key}  →  aplicado em: "${title}"`);
+      } else {
+        report.push(`✖ ${key}  →  camada NÃO encontrada (verifique nome/ordem ou envie layers.js)`);
+      }
+    });
+    // Exibe no console para debug
+    console.info('[Zoom por resolução] Resultado da associação camada ↔ regra:', '\n' + report.join('\n'));
+
+  })();
+
       // 1) MousePosition no #coords - ordem LAT, LON
       (function(){
         var target = document.getElementById('coords');
@@ -157,35 +251,79 @@
           map.addControl(mp);
         }
       })();
+      
       // 2) Busca por coordenadas (lon/lat + UTM 22S/23S)
-      (function(){
-        var input = document.getElementById('coord-input');
-        var btn = document.getElementById('coord-go');
-        if(!input || !btn) return;
-        function fly(){
-          var c = parseCoord(input.value);
-          if(!c){ input.style.borderColor = '#c00'; return; } else { input.style.borderColor = '#999'; }
-          var dest = ol.proj.fromLonLat([c.lon, c.lat], view.getProjection());
-          var currentZoom = view.getZoom() || 4;
-          var targetZoom = Math.max(currentZoom, 12);
-          view.animate({ center: dest, duration: 600 }, { zoom: targetZoom, duration: 400 });
-          try{
-            if(!window.__coordLayer){
-              window.__coordLayer = new ol.layer.Vector({
-                source: new ol.source.Vector(),
-                style: new ol.style.Style({
-                  image: new ol.style.Circle({ radius: 6, fill: new ol.style.Fill({color:'#ff3b30'}), stroke: new ol.style.Stroke({color:'#fff', width:2}) })
-                })
-              });
-              map.addLayer(window.__coordLayer);
+        (function(){
+          var input = document.getElementById('coord-input');
+          var btn = document.getElementById('coord-go');
+          if(!input || !btn) return;
+
+          // [N O V O] cria o botão "Remover ponto" ao lado do "Ir"
+          var wrap = document.getElementById('coord-search');
+          var btnClearPoint = document.createElement('button');
+          btnClearPoint.id = 'coord-clear';
+          btnClearPoint.textContent = 'Remover ponto';
+          btnClearPoint.title = 'Remove o marcador da última busca';
+          btnClearPoint.style.cssText = 'padding:4px 8px; font-size:12px; cursor:pointer';
+          wrap.appendChild(btnClearPoint);
+
+          function fly(){
+            var c = parseCoord(input.value);
+            if(!c){ input.style.borderColor = '#c00'; return; } else { input.style.borderColor = '#999'; }
+
+            var dest = ol.proj.fromLonLat([c.lon, c.lat], view.getProjection());
+            var currentZoom = view.getZoom() || 4;
+            var targetZoom = Math.max(currentZoom, 12);
+
+            view.animate({ center: dest, duration: 600 }, { zoom: targetZoom, duration: 400 });
+
+            try{
+              // cria a camada de ponto se ainda não existir
+              if(!window.__coordLayer){
+                window.__coordLayer = new ol.layer.Vector({
+                  source: new ol.source.Vector(),
+                  style: new ol.style.Style({
+                    image: new ol.style.Circle({
+                      radius: 6,
+                      fill:  new ol.style.Fill({ color:'#ff3b30' }),
+                      stroke:new ol.style.Stroke({ color:'#fff', width:2 })
+                    })
+                  })
+                });
+                map.addLayer(window.__coordLayer);
+              }
+              // mantém apenas UM ponto (limpa antes)
+              window.__coordLayer.getSource().clear();
+              window.__coordLayer.getSource().addFeature(
+                new ol.Feature({ geometry: new ol.geom.Point(dest) })
+              );
+            }catch(e){}
+          }
+
+          // eventos já existentes
+          btn.addEventListener('click', fly);
+          input.addEventListener('keydown', function(e){ if(e.key==='Enter'){ fly(); }});
+
+          // [N O V O] limpar o ponto pelo botão
+          btnClearPoint.addEventListener('click', function(){
+            try{
+              if(window.__coordLayer){
+                window.__coordLayer.getSource().clear();
+              }
+            }catch(e){}
+          });
+
+          // [Opcional] atalho Esc para limpar o ponto
+          document.addEventListener('keydown', function(e){
+            if(e.key === 'Escape'){
+              try{
+                if(window.__coordLayer){
+                  window.__coordLayer.getSource().clear();
+                }
+              }catch(e){}
             }
-            window.__coordLayer.getSource().clear();
-            window.__coordLayer.getSource().addFeature(new ol.Feature({ geometry: new ol.geom.Point(dest) }));
-          }catch(e){}
-        }
-        btn.addEventListener('click', fly);
-        input.addEventListener('keydown', function(e){ if(e.key==='Enter'){ fly(); }});
-      })();
+          });
+        })();
       // 3) Upload KML/SHP com estilo default (sem fill + linha vermelha) e toggle de visibilidade
       (function(){
         var input = document.getElementById('file-input');
